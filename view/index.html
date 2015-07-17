@@ -79,7 +79,7 @@
 
                 newX = ((speedX > 0 && newX <= x2) || (speedX < 0 && newX >= x2)) ? newX : x2;
                 newY = ((speedY > 0 && newY <= y2) || (speedY < 0 && newY >= y2)) ? newY : y2;
-                
+
                 draw(context, x1, y1, newX, newY);
 
                 // request new frame
@@ -101,12 +101,12 @@
                 var ctx = board[0].getContext('2d');
                 var height = board.height();
                 var width = board.width();
-                
+
                 var recBoard = $('#board2');
                 var recCtx = recBoard[0].getContext('2d');;
                 var height = recBoard.height();
                 var width = recBoard.width();
-                
+
                 board.on('mousedown touchstart', function(e) {
                     clearTimeout(globalSendTimeoutId);
                     currX = e.offsetX;
@@ -115,8 +115,10 @@
                     drawCircle(ctx, currX, currY, size/2);
                     startTime = Date.now();
                     isDrawing = true;
+
+                    $('#test').html($('#test').html() + ' ' + e.type)
                 });
-                
+
                 function moveHandler (e) {
                     if (isDrawing) {
                         if (e.type === 'touchmove') {
@@ -135,41 +137,48 @@
                 }
                 board.on('mousemove', moveHandler);
                 board[0].addEventListener('touchmove', moveHandler, true);
-                
-                board.on('mouseup touchend', function() {
+
+                board.on('mouseup touchend', function(e) {
                     isDrawing = false;
                     currX = undefined;
                     currY = undefined;
                     prevX = undefined;
                     prevY = undefined;
-                    
+
                     socket.emit('draw', JSON.stringify(track));
                     track = [];
-                    
+                    $('#test').html($('#test').html() + ' ' + e.type)
+
                     globalSendTimeoutId = clearCanvas(ctx, height, width);
                 });
-                
+
                 socket.on('draw', function(msg) {
                     clearTimeout(globalRevTimeoutId);
-                    
+
                     var toDraw = JSON.parse(msg);
                     if (toDraw.length <= 0) {
+                        globalRevTimeoutId = clearCanvas(recCtx, width, height);
                         return;
                     }
                     // Somehow, from touch the first point is not valid
                     if (toDraw[0][0] == null || toDraw[0][1] == null) {
                         toDraw.splice(0,1);
                     }
+                    if (toDraw.length <= 0) {
+                        globalRevTimeoutId = clearCanvas(recCtx, width, height);
+                        return;
+                    }
                     drawCircle(recCtx, toDraw[0][0], toDraw[0][1], size/2);
                     if (toDraw.length === 1) {
+                        globalRevTimeoutId = clearCanvas(recCtx, width, height);
                         return;
                     }
                     lineHelper(recCtx, toDraw, 0);
-                    
+
                     globalRevTimeoutId = clearCanvas(recCtx, width, height);
                 });
-                
-                
+
+
             });
         </script>
     </head>
