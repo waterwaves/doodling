@@ -8,11 +8,23 @@
         <script src="/jquery-ui.min.js"></script>
         <script src="/socket.io-1.3.5.js"></script>
         <script>
+            window.requestAnimFrame = (function(callback) {
+            return window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame ||
+            function(callback) {
+              window.setTimeout(callback, 1000 / 60);
+            };
+          })();
+        </script>
+        <script>
             console.log('I am working!');
             var isDrawing = false;
             var prevX, prevY, currX, currY;
             var size = 25;
             var track = [];
+            var startTime;
+            var endTime;
+            var timeDelta = 0;
+
             function drawCircle (ctx, centerX, centerY, radius) {
                 // use circle to smooth out the path
                 ctx.beginPath();
@@ -33,6 +45,50 @@
 
                 drawCircle(ctx, x2, y2, size/2);
             }
+            function lineHelper(context, toDraw, index) {
+                if (toDraw.length <= index + 1) {
+                    return;
+                }
+                var x1 = toDraw[index][0];
+                var y1 = toDraw[index][1];
+                var x2 = toDraw[index+1][0];
+                var y2 = toDraw[index+1][1];
+                var speedX = (x2 - x1) / toDraw[index+1][2] * 1000;
+                var speedY = (y2 - y1) / toDraw[index+1][2] * 1000;
+                animationDraw(context, toDraw[index], toDraw[index+1], [speedX, speedY], toDraw, index);
+            }
+            function animationDraw (context, start, end, speed, toDraw, index) {
+//                console.log('I am here!', start)
+//                console.log(end)
+//                console.log('>>>>>>>>>>>', speed)
+                var x1 = start[0];
+                var y1 = start[1];
+                var x2 = end[0];
+                var y2 = end[1];
+                var speedX = speed[0] || 0;
+                var speedY = speed[1] || 0;
+                if ((speedX > 0 && x2 <= x1) || (speedX < 0 && x2 >= x1)
+                    || (speedY > 0 && y2 <= y1) || (speedY < 0 && y2 >= y1)
+                    || (speedX === 0 && speedY === 0)) {
+                    return lineHelper(context, toDraw, index+1);
+                }
+
+                // pixels / second
+                var newX = speedX / 60 + x1;
+                var newY = speedY / 60 + y1;
+
+                newX = ((speedX > 0 && newX <= x2) || (speedX < 0 && newX >= x2)) ? newX : x2;
+                newY = ((speedY > 0 && newY <= y2) || (speedY < 0 && newY >= y2)) ? newY : y2;
+                
+                //circle.x = newX;
+                
+                draw(context, x1, y1, newX, newY);
+
+                // request new frame
+                requestAnimFrame(function() {
+                  animationDraw(context, [newX, newY], end, [speedX, speedY], toDraw, index);
+                });
+            }
 
             var socket = io();
 
@@ -50,9 +106,10 @@
                 board.mousedown(function(e) {
                     currX = e.offsetX;
                     currY = e.offsetY;
-                    track.push([currX, currY]);
-                    isDrawing = true;
+                    track.push([currX, currY, 0]);
                     drawCircle(ctx, currX, currY, size/2);
+                    startTime = Date.now();
+                    isDrawing = true;
                 });
                 board.mousemove(function(e) {
                     if (isDrawing) {
@@ -61,7 +118,9 @@
                         currX = e.offsetX;
                         currY = e.offsetY;
                         draw(ctx, prevX, prevY, currX, currY);
-                        track.push([currX, currY]);
+                        endTime = Date.now();
+                        track.push([currX, currY, endTime - startTime]);
+                        startTime = endTime;
                     }
                 });
                 board.mouseup(function() {
@@ -70,6 +129,7 @@
                     currY = undefined;
                     prevX = undefined;
                     prevY = undefined;
+                    console.log(JSON.stringify(track));
                     
                     socket.emit('draw', JSON.stringify(track));
                     track = [];
@@ -77,15 +137,11 @@
                 
                 socket.on('draw', function(msg) {
                     var toDraw = JSON.parse(msg);
+                    drawCircle(recCtx, toDraw[0][0], toDraw[0][1], size/2);
                     if (toDraw.length === 1) {
-                        drawCircle(recCtx, toDraw[0][0], toDraw[0][1], size/2);
                         return;
                     }
-                    var start = toDraw.splice(0, 1)[0];
-                    toDraw.forEach(function(point) {
-                        draw(recCtx, start[0], start[1], point[0], point[1]);
-                        start = point;
-                    });
+                    lineHelper(recCtx, toDraw, 0);
                 });
             });
         </script>
